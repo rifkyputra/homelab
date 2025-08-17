@@ -1,5 +1,11 @@
 # Production-ready PostgreSQL with pgAdmin
-# Security-hardened configuration with health checks and resource limits
+# Security-hardened configuration    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: "True"
+      PGADMIN_CONFIG_CONSOLE_LOG_LEVEL: 30
+      PGADMIN_CONFIG_SESSION_COOKIE_SECURE: "True"
+      PGADMIN_CONFIG_SESSION_COOKIE_HTTPONLY: "True"alth checks and resource limits
 
 services:
   database:
@@ -78,6 +84,7 @@ services:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
       PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: "True"
+      PGADMIN_CONFIG_LOGIN_BANNER: "Authorized Access Only"
       PGADMIN_CONFIG_CONSOLE_LOG_LEVEL: 30
       PGADMIN_CONFIG_SESSION_COOKIE_SECURE: "True"
       PGADMIN_CONFIG_SESSION_COOKIE_HTTPONLY: "True"

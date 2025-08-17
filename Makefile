@@ -81,7 +81,7 @@ security: ## Run security audit
 health: ## Quick health check
 	@echo "❤️  Quick Health Check:"
 	@docker exec postgres_primary pg_isready -U postgres_admin -d production_db && echo "✅ Database is healthy" || echo "❌ Database is not responding"
-	@docker exec pgladmin_web wget --quiet --tries=1 --spider http://localhost/misc/ping && echo "✅ pgAdmin is healthy" || echo "❌ pgAdmin is not responding"
+	@docker exec pgadmin_web wget --quiet --tries=1 --spider http://localhost/misc/ping && echo "✅ pgAdmin is healthy" || echo "❌ pgAdmin is not responding"
 
 # Logs and debugging
 logs: ## Show service logs

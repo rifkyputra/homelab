@@ -7,12 +7,12 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-# Load environment variables
+# Load environment variables  
 if [ -f "$PROJECT_DIR/.env" ]; then
-    export $(cat "$PROJECT_DIR/.env" | grep -v '#' | xargs)
-fi
-
-CONTAINER_NAME="postgres_primary"
+    set -o allexport
+    source "$PROJECT_DIR/.env"
+    set +o allexport
+fiCONTAINER_NAME="postgres_primary"
 LOG_FILE="$PROJECT_DIR/logs/security.log"
 
 mkdir -p "$PROJECT_DIR/logs"

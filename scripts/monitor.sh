@@ -10,7 +10,9 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Load environment variables
 if [ -f "$PROJECT_DIR/.env" ]; then
-    export $(cat "$PROJECT_DIR/.env" | grep -v '#' | xargs)
+    set -o allexport
+    source "$PROJECT_DIR/.env"
+    set +o allexport
 fi
 
 CONTAINER_NAME="postgres_primary"
@@ -61,35 +63,50 @@ get_db_metrics() {
     MAX_CONNECTIONS=$(docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
         "SHOW max_connections;" 2>/dev/null | xargs)
     
-    CONNECTION_PCT=$((CONNECTIONS * 100 / MAX_CONNECTIONS))
-    log "   Active Connections: $CONNECTIONS/$MAX_CONNECTIONS ($CONNECTION_PCT%)"
+    # Ensure we have valid numbers
+    CONNECTIONS=${CONNECTIONS:-0}
+    MAX_CONNECTIONS=${MAX_CONNECTIONS:-100}
     
-    if [ $CONNECTION_PCT -gt $ALERT_THRESHOLD_CONNECTIONS ]; then
-        log "⚠️  WARNING: High connection usage: $CONNECTION_PCT%"
+    if [ "$MAX_CONNECTIONS" -gt 0 ]; then
+        CONNECTION_PCT=$((CONNECTIONS * 100 / MAX_CONNECTIONS))
+        log "   Active Connections: $CONNECTIONS/$MAX_CONNECTIONS ($CONNECTION_PCT%)"
+        
+        if [ $CONNECTION_PCT -gt $ALERT_THRESHOLD_CONNECTIONS ]; then
+            log "⚠️  WARNING: High connection usage: $CONNECTION_PCT%"
+        fi
+    else
+        log "   Active Connections: $CONNECTIONS (unable to determine max)"
     fi
     
     # Database size
     DB_SIZE=$(docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
         "SELECT pg_size_pretty(pg_database_size('$POSTGRES_DB'));" 2>/dev/null | xargs)
+    DB_SIZE=${DB_SIZE:-"N/A"}
     log "   Database Size: $DB_SIZE"
     
     # Transaction rate
     TPS=$(docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
-        "SELECT sum(xact_commit + xact_rollback) FROM pg_stat_database WHERE datname = '$POSTGRES_DB';" 2>/dev/null | xargs)
+        "SELECT COALESCE(sum(xact_commit + xact_rollback), 0) FROM pg_stat_database WHERE datname = '$POSTGRES_DB';" 2>/dev/null | xargs)
+    TPS=${TPS:-"0"}
     log "   Total Transactions: $TPS"
     
     # Cache hit ratio
     CACHE_HIT=$(docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
-        "SELECT round(sum(blks_hit)*100/sum(blks_hit+blks_read),2) FROM pg_stat_database;" 2>/dev/null | xargs)
+        "SELECT COALESCE(round(sum(blks_hit)*100.0/NULLIF(sum(blks_hit+blks_read),0),2), 0) FROM pg_stat_database;" 2>/dev/null | xargs)
+    CACHE_HIT=${CACHE_HIT:-"0"}
     log "   Cache Hit Ratio: $CACHE_HIT%"
     
-    if (( $(echo "$CACHE_HIT < 95" | bc -l) )); then
-        log "⚠️  WARNING: Low cache hit ratio: $CACHE_HIT%"
+    # Only check cache hit ratio if we have a valid number
+    if [ "$CACHE_HIT" != "0" ] && [ "$CACHE_HIT" != "" ] && command -v bc >/dev/null 2>&1; then
+        if (( $(echo "$CACHE_HIT < 95" | bc -l) )); then
+            log "⚠️  WARNING: Low cache hit ratio: $CACHE_HIT%"
+        fi
     fi
     
     # Longest running query
     LONGEST_QUERY=$(docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
         "SELECT COALESCE(max(extract(epoch from (now() - query_start))), 0) FROM pg_stat_activity WHERE state = 'active';" 2>/dev/null | xargs)
+    LONGEST_QUERY=${LONGEST_QUERY:-"0"}
     log "   Longest Query Runtime: ${LONGEST_QUERY}s"
     
     if (( $(echo "$LONGEST_QUERY > 300" | bc -l) )); then
@@ -130,6 +147,8 @@ get_system_metrics() {
 check_blocked_queries() {
     BLOCKED_QUERIES=$(docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
         "SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock';" 2>/dev/null | xargs)
+    
+    BLOCKED_QUERIES=${BLOCKED_QUERIES:-0}
     
     if [ "$BLOCKED_QUERIES" -gt 0 ]; then
         log "⚠️  WARNING: $BLOCKED_QUERIES blocked queries detected"

@@ -10,7 +10,9 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Load environment variables
 if [ -f "$PROJECT_DIR/.env" ]; then
-    export $(cat "$PROJECT_DIR/.env" | grep -v '#' | xargs)
+    set -o allexport
+    source "$PROJECT_DIR/.env"
+    set +o allexport
 fi
 
 # Backup configuration
