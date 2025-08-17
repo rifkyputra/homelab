@@ -8,27 +8,6 @@ echo "================================================================"
 # Source the config
 source ../config.env
 
-# Function to check if a service is listening on a port
-check_service_port() {
-    local port=$1
-    local service_name=$2
-    echo "Checking $service_name (port $port)..."
-    
-    if sudo netstat -tlnp | grep -q ":$port "; then
-        local bind_address=$(sudo netstat -tlnp | grep ":$port " | awk '{print $4}' | cut -d: -f1)
-        if [[ "$bind_address" == "127.0.0.1" ]]; then
-            echo "  ⚠️  $service_name is running but only listening on localhost"
-            return 0  # Changed from 1 to 0 - don't treat as error
-        else
-            echo "  ✅ $service_name is running and accessible"
-            return 0
-        fi
-    else
-        echo "  ❌ $service_name is not running on port $port"
-        return 2
-    fi
-}
-
 # Function to fix Netdata configuration
 fix_netdata() {
     echo "🔧 Fixing Netdata configuration..."
@@ -62,9 +41,14 @@ fix_code_server() {
         echo "  ⚠️  Code-server not running"
         if command -v code-server >/dev/null 2>&1; then
             echo "  ⚠️  Code-server installed but not running as service"
-            echo "  ℹ️  You may need to configure it manually"
+            echo "  ℹ️  To start code-server:"
+            echo "       sudo systemctl enable --now code-server@$(whoami)"
         else
             echo "  ❌ Code-server not installed"
+            echo "  ℹ️  To install code-server:"
+            echo "       curl -fsSL https://code-server.dev/install.sh | sh"
+            echo "       sudo systemctl enable --now code-server@$(whoami)"
+            echo "       # Then configure in ~/.config/code-server/config.yaml"
         fi
     fi
 }
@@ -74,10 +58,21 @@ fix_https() {
     echo "🔧 Checking HTTPS configuration..."
     if ! sudo netstat -tlnp | grep -q ":443 "; then
         echo "  ⚠️  No service listening on port 443 (HTTPS)"
-        echo "  ℹ️  If you have a domain configured, run certbot to enable HTTPS"
-        if [[ -n "${DOMAIN_NAME:-}" ]]; then
+        if [[ -n "${DOMAIN_NAME:-}" ]] && [[ "${DOMAIN_NAME}" != "" ]]; then
             echo "  ℹ️  Domain configured: $DOMAIN_NAME"
-            echo "  ℹ️  Run: sudo certbot --nginx -d $DOMAIN_NAME"
+            echo "  ℹ️  To enable HTTPS, run: sudo certbot --nginx -d $DOMAIN_NAME"
+        else
+            echo "  ℹ️  No domain configured in config.env"
+            echo "  ℹ️  To enable HTTPS:"
+            echo "       1. Set DOMAIN_NAME and ADMIN_EMAIL in ../config.env"
+            echo "       2. Run: sudo certbot --nginx -d yourdomain.com"
+            echo "  ℹ️  Or access services via HTTP on port 80 instead"
+        fi
+        
+        # Check if nginx has any SSL configuration
+        if sudo nginx -T 2>/dev/null | grep -q "listen.*443.*ssl"; then
+            echo "  ⚠️  SSL configuration found in nginx but not active"
+            echo "  ℹ️  Try: sudo systemctl reload nginx"
         fi
     fi
 }
@@ -85,41 +80,55 @@ fix_https() {
 echo "🔍 Checking service accessibility..."
 echo "=================================="
 
-# Check each problematic service
-check_service_port 19999 "Netdata"
-netdata_status=$?
-# Check if Netdata is localhost-only
-netdata_localhost=$(sudo netstat -tlnp | grep ":19999 " | awk '{print $4}' | cut -d: -f1 | grep -q "127.0.0.1" && echo "true" || echo "false")
+# Define services to check (port:name:fix_function)
+declare -a SERVICES=(
+    "19999:Netdata:fix_netdata"
+    "443:HTTPS:fix_https"
+    "8080:Code-server:fix_code_server"
+    "5901:VNC:fix_vnc"
+)
 
-check_service_port 443 "HTTPS"
-https_status=$?
+# Get netstat output once
+NETSTAT_OUTPUT=$(sudo netstat -tlnp)
 
-check_service_port 8080 "Code-server"
-codeserver_status=$?
-
-check_service_port 5901 "VNC"
-vnc_status=$?
+# Check each service
+declare -A service_status
+declare -A service_localhost
+for service in "${SERVICES[@]}"; do
+    IFS=':' read -r port name fix_func <<< "$service"
+    echo "Checking $name (port $port)..."
+    
+    if echo "$NETSTAT_OUTPUT" | grep -q ":$port "; then
+        bind_address=$(echo "$NETSTAT_OUTPUT" | grep ":$port " | awk '{print $4}' | cut -d: -f1)
+        if [[ "$bind_address" == "127.0.0.1" ]]; then
+            echo "  ⚠️  $name is running but only listening on localhost"
+            service_status["$port"]=0
+            service_localhost["$port"]="true"
+        else
+            echo "  ✅ $name is running and accessible"
+            service_status["$port"]=0
+            service_localhost["$port"]="false"
+        fi
+    else
+        echo "  ❌ $name is not running on port $port"
+        service_status["$port"]=2
+        service_localhost["$port"]="false"
+    fi
+done
 
 echo
 echo "🔧 Applying fixes..."
 echo "==================="
 
 # Fix services that need fixing
-if [[ $netdata_localhost == "true" ]]; then
-    fix_netdata
-fi
-
-if [[ $vnc_status -eq 2 ]]; then
-    fix_vnc
-fi
-
-if [[ $codeserver_status -eq 2 ]]; then
-    fix_code_server
-fi
-
-if [[ $https_status -eq 2 ]]; then
-    fix_https
-fi
+for service in "${SERVICES[@]}"; do
+    IFS=':' read -r port name fix_func <<< "$service"
+    
+    # Fix if service is localhost-only or not running
+    if [[ "${service_localhost[$port]}" == "true" ]] || [[ "${service_status[$port]}" -eq 2 ]]; then
+        $fix_func
+    fi
+done
 
 # Ensure firewall rules are in place
 echo
