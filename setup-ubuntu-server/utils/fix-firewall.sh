@@ -1,17 +1,5 @@
 #!/usr/bin/env bash
-set -# Function to check and start VNC service
-fix_vnc() {
-    echo "🔧 Checking VNC service..."
-    if ! systemctl is-active --quiet vncserver@1.service 2>/dev/null; then
-        echo "  ⚠️  VNC service not running"
-        echo "  ℹ️  VNC requires manual setup. To install and configure VNC:"
-        echo "       1. Set VNC password: vncpasswd"
-        echo "       2. Run: ./install-vnc.sh"
-        echo "       3. Or troubleshoot: ./troubleshoot-vnc.sh"
-    else
-        echo "  ✅ VNC service is running"
-    fi
-}il
+set -euo pipefail
 
 # Comprehensive homelab service diagnostics and fix script
 echo "🔍 Diagnosing and fixing homelab service accessibility issues..."
@@ -35,14 +23,15 @@ fix_netdata() {
     fi
 }
 
-# Function to check and start VNC service
+# Function to check VNC service (no auto-start to avoid misconfiguration loops)
 fix_vnc() {
     echo "🔧 Checking VNC service..."
-    if ! systemctl is-active --quiet vncserver@:1.service 2>/dev/null; then
-        echo "  ⚠️  VNC service not running, attempting to start..."
-        # Try to start VNC for the current user
-        sudo systemctl enable vncserver@:1.service 2>/dev/null || true
-        sudo systemctl start vncserver@:1.service 2>/dev/null || echo "  ⚠️  VNC service may need manual configuration"
+    if systemctl is-active --quiet vncserver@1.service 2>/dev/null; then
+        echo "  ✅ VNC service is running"
+    else
+        echo "  ⚠️  VNC service not running"
+        echo "  ℹ️  To install/configure: ./install-vnc.sh"
+        echo "  ℹ️  To troubleshoot:    ./troubleshoot-vnc.sh"
     fi
 }
 
