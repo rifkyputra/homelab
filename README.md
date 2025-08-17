@@ -88,7 +88,6 @@ docker exec -i selfhostpg-database-1 psql -U postgres_user myapp_db < backup.sql
 When you need to recreate containers (e.g., after changing credentials):
 
 #### Option 1: Recreate containers only (keeps data)
-
 ```bash
 docker compose down
 docker compose up -d --force-recreate
@@ -98,15 +97,48 @@ docker compose up -d --force-recreate
 
 ```bash
 # For pgAdmin only (useful when changing pgAdmin credentials)
-docker compose stop pgadmin
-docker compose rm pgadmin
-docker volume rm selfhostpg_pgadmin_data  # Removes pgAdmin settings
-docker compose up pgadmin -d
+docker compose stop pgladmin
+docker compose rm pgladmin
+docker volume rm selfhostpg_pgladmin_data  # Removes pgAdmin settings
+docker compose up pgladmin -d
 
 # For database only
 docker compose stop database
 docker compose rm database
 docker compose up database -d
+```
+
+#### Option 3: Complete rebuild (⚠️ DELETES ALL DATA)
+
+```bash
+# WARNING: This will delete all your database data!
+docker compose down -v  # -v removes volumes
+docker compose up -d
+```
+
+#### Option 4: Fresh start with new environment variables
+
+```bash
+# After modifying .env file
+docker compose down
+docker compose rm  # Remove containers
+docker compose up -d --force-recreate
+```
+
+### Troubleshooting
+
+If pgAdmin login fails after changing credentials:
+```bash
+docker compose stop pgladmin
+docker compose rm pgladmin
+docker volume rm selfhostpg_pgladmin_data
+docker compose up pgladmin -d
+```
+
+If PostgreSQL won't start:
+```bash
+docker compose logs database
+# Check for permission or configuration issues
 ```
 
 #### Option 3: Complete rebuild (⚠️ DELETES ALL DATA)
