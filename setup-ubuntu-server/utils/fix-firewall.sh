@@ -18,7 +18,7 @@ check_service_port() {
         local bind_address=$(sudo netstat -tlnp | grep ":$port " | awk '{print $4}' | cut -d: -f1)
         if [[ "$bind_address" == "127.0.0.1" ]]; then
             echo "  ⚠️  $service_name is running but only listening on localhost"
-            return 1
+            return 0  # Changed from 1 to 0 - don't treat as error
         else
             echo "  ✅ $service_name is running and accessible"
             return 0
@@ -88,6 +88,8 @@ echo "=================================="
 # Check each problematic service
 check_service_port 19999 "Netdata"
 netdata_status=$?
+# Check if Netdata is localhost-only
+netdata_localhost=$(sudo netstat -tlnp | grep ":19999 " | awk '{print $4}' | cut -d: -f1 | grep -q "127.0.0.1" && echo "true" || echo "false")
 
 check_service_port 443 "HTTPS"
 https_status=$?
@@ -103,7 +105,7 @@ echo "🔧 Applying fixes..."
 echo "==================="
 
 # Fix services that need fixing
-if [[ $netdata_status -eq 1 ]]; then
+if [[ $netdata_localhost == "true" ]]; then
     fix_netdata
 fi
 
