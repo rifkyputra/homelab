@@ -1,0 +1,16 @@
+# Environment files
+.env
+
+# Database data (if using bind mounts)
+db-data/
+pgadmin-data/
+
+# Docker
+.dockerignore
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
