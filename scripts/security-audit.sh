@@ -12,7 +12,9 @@ if [ -f "$PROJECT_DIR/.env" ]; then
     set -o allexport
     source "$PROJECT_DIR/.env"
     set +o allexport
-fiCONTAINER_NAME="postgres_primary"
+fi
+
+CONTAINER_NAME="postgres_primary"
 LOG_FILE="$PROJECT_DIR/logs/security.log"
 
 mkdir -p "$PROJECT_DIR/logs"
@@ -44,7 +46,7 @@ validate_security_config() {
     log "🔒 Validating security configuration..."
     
     # Check password encryption
-    ENCRYPTION_METHOD=$(docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
+    ENCRYPTION_METHOD=$(docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
         "SHOW password_encryption;" 2>/dev/null | xargs)
     
     if [ "$ENCRYPTION_METHOD" = "scram-sha-256" ]; then
@@ -54,7 +56,7 @@ validate_security_config() {
     fi
     
     # Check SSL configuration
-    SSL_STATUS=$(docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
+    SSL_STATUS=$(docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
         "SHOW ssl;" 2>/dev/null | xargs)
     
     if [ "$SSL_STATUS" = "on" ]; then
@@ -64,7 +66,7 @@ validate_security_config() {
     fi
     
     # Check log configuration
-    LOG_CONNECTIONS=$(docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
+    LOG_CONNECTIONS=$(docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
         "SHOW log_connections;" 2>/dev/null | xargs)
     
     if [ "$LOG_CONNECTIONS" = "on" ]; then
@@ -90,11 +92,11 @@ audit_user_privileges() {
     log "👥 Auditing user privileges..."
     
     # Get list of users and their privileges
-    docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+    docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
         "SELECT rolname, rolsuper, rolcreaterole, rolcreatedb, rolcanlogin, rolreplication FROM pg_roles;" >> "$LOG_FILE"
     
     # Check for users with excessive privileges
-    SUPERUSERS=$(docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
+    SUPERUSERS=$(docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
         "SELECT count(*) FROM pg_roles WHERE rolsuper = true;" 2>/dev/null | xargs)
     
     log "   Number of superusers: $SUPERUSERS"
@@ -110,7 +112,7 @@ check_suspicious_activity() {
     
     # Check for failed connections (would need custom logging)
     # Check for unusual query patterns
-    LONG_QUERIES=$(docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
+    LONG_QUERIES=$(docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
         "SELECT count(*) FROM pg_stat_activity WHERE query_start < now() - interval '1 hour' AND state = 'active';" 2>/dev/null | xargs)
     
     if [ "$LONG_QUERIES" -gt 0 ]; then
@@ -118,7 +120,7 @@ check_suspicious_activity() {
     fi
     
     # Check for connections from unusual sources (would need network monitoring)
-    ACTIVE_CONNECTIONS=$(docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
+    ACTIVE_CONNECTIONS=$(docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
         "SELECT count(*) FROM pg_stat_activity WHERE client_addr IS NOT NULL;" 2>/dev/null | xargs)
     
     log "   Active external connections: $ACTIVE_CONNECTIONS"
@@ -135,16 +137,16 @@ generate_security_report() {
 Generated: $(date)
 
 ## Configuration Security
-$(docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT name, setting FROM pg_settings WHERE name IN ('password_encryption', 'ssl', 'log_connections', 'log_statement', 'row_security');" 2>/dev/null)
+$(docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT name, setting FROM pg_settings WHERE name IN ('password_encryption', 'ssl', 'log_connections', 'log_statement', 'row_security');" 2>/dev/null)
 
 ## User Accounts
-$(docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT rolname, rolsuper, rolcreaterole, rolcreatedb, rolcanlogin FROM pg_roles ORDER BY rolname;" 2>/dev/null)
+$(docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT rolname, rolsuper, rolcreaterole, rolcreatedb, rolcanlogin FROM pg_roles ORDER BY rolname;" 2>/dev/null)
 
 ## Database Permissions
-$(docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT datname, datacl FROM pg_database WHERE datname = '$POSTGRES_DB';" 2>/dev/null)
+$(docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT datname, datacl FROM pg_database WHERE datname = '$POSTGRES_DB';" 2>/dev/null)
 
 ## Extensions
-$(docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT extname, extversion FROM pg_extension;" 2>/dev/null)
+$(docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT extname, extversion FROM pg_extension;" 2>/dev/null)
 
 EOF
     
@@ -155,7 +157,7 @@ EOF
 apply_security_hardening() {
     log "🛡️ Applying security hardening..."
     
-    docker exec "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" << EOF
+    docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_NAME" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" << EOF
 -- Enable row-level security by default for new tables
 ALTER DATABASE $POSTGRES_DB SET row_security = on;
 
@@ -194,7 +196,7 @@ run_security_check() {
     # apply_security_hardening
     
     log "✅ Security audit completed"
-    log "===========================================""
+    log "=========================================="
 }
 
 # Run security check
