@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -# Function to check and start VNC service
+fix_vnc() {
+    echo "🔧 Checking VNC service..."
+    if ! systemctl is-active --quiet vncserver@1.service 2>/dev/null; then
+        echo "  ⚠️  VNC service not running"
+        echo "  ℹ️  VNC requires manual setup. To install and configure VNC:"
+        echo "       1. Set VNC password: vncpasswd"
+        echo "       2. Run: ./install-vnc.sh"
+        echo "       3. Or troubleshoot: ./troubleshoot-vnc.sh"
+    else
+        echo "  ✅ VNC service is running"
+    fi
+}il
 
 # Comprehensive homelab service diagnostics and fix script
 echo "🔍 Diagnosing and fixing homelab service accessibility issues..."
@@ -41,15 +53,13 @@ fix_code_server() {
         echo "  ⚠️  Code-server not running"
         if command -v code-server >/dev/null 2>&1; then
             echo "  ⚠️  Code-server installed but not running as service"
-            echo "  ℹ️  To start code-server:"
-            echo "       sudo systemctl enable --now code-server@$(whoami)"
+            echo "  ℹ️  Try: sudo systemctl start code-server@$(whoami).service"
         else
             echo "  ❌ Code-server not installed"
-            echo "  ℹ️  To install code-server:"
-            echo "       curl -fsSL https://code-server.dev/install.sh | sh"
-            echo "       sudo systemctl enable --now code-server@$(whoami)"
-            echo "       # Then configure in ~/.config/code-server/config.yaml"
+            echo "  ℹ️  To install code-server, run: ./install-code-server.sh"
         fi
+    else
+        echo "  ✅ Code-server service is running"
     fi
 }
 
