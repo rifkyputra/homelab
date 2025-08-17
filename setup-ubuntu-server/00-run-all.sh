@@ -45,6 +45,7 @@ SCRIPTS=(
   "09-monitoring.sh"
   "10-netplan-static-ip.sh"
   "11-apps-compose.sh"
+  "12-dokku.sh"
 )
 
 # Verify all scripts exist before execution
