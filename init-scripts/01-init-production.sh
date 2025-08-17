@@ -14,21 +14,21 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
     
     -- Create read-only user for monitoring/reporting
-    CREATE USER readonly_user WITH ENCRYPTED PASSWORD 'ReadOnly@2024#Monitor';
+    CREATE USER readonly_user WITH ENCRYPTED PASSWORD '${POSTGRES_READONLY_PASSWORD}';
     GRANT CONNECT ON DATABASE $POSTGRES_DB TO readonly_user;
     GRANT USAGE ON SCHEMA public TO readonly_user;
     GRANT SELECT ON ALL TABLES IN SCHEMA public TO readonly_user;
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO readonly_user;
     
     -- Create application user with limited privileges
-    CREATE USER app_user WITH ENCRYPTED PASSWORD 'App@User#2024!Secure';
+    CREATE USER app_user WITH ENCRYPTED PASSWORD '${POSTGRES_APP_USER_PASSWORD}';
     GRANT CONNECT ON DATABASE $POSTGRES_DB TO app_user;
     GRANT USAGE, CREATE ON SCHEMA public TO app_user;
     GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user;
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user;
     
     -- Create backup user
-    CREATE USER backup_user WITH ENCRYPTED PASSWORD 'Backup@User#2024!Safe';
+    CREATE USER backup_user WITH ENCRYPTED PASSWORD '${POSTGRES_BACKUP_USER_PASSWORD}';
     GRANT CONNECT ON DATABASE $POSTGRES_DB TO backup_user;
     ALTER USER backup_user WITH REPLICATION;
     

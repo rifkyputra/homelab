@@ -63,10 +63,12 @@ verify_backup() {
     local backup_file="$1"
     
     if [ -f "$backup_file" ] && [ -s "$backup_file" ]; then
-        # Check if the file contains SQL and ends properly
-        if head -n 1 "$backup_file" | grep -q "PostgreSQL database dump" && \
-           tail -n 5 "$backup_file" | grep -q "PostgreSQL database dump complete"; then
-            return 0
+        # Test if the compressed file is valid
+        if gunzip -t "$backup_file" 2>/dev/null; then
+            # Try to verify the backup content by testing restoration
+            if gunzip -c "$backup_file" | docker exec -i -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_NAME" pg_restore --list >/dev/null 2>&1; then
+                return 0
+            fi
         fi
     fi
     return 1
@@ -89,7 +91,7 @@ fi
 log "Creating full database backup: $BACKUP_FILE"
 
 # Use pg_dump with optimal settings for production
-if docker exec "$CONTAINER_NAME" pg_dump \
+if docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_NAME" pg_dump \
     -U "$POSTGRES_USER" \
     -d "$POSTGRES_DB" \
     --verbose \
@@ -109,7 +111,7 @@ if docker exec "$CONTAINER_NAME" pg_dump \
     log "Backup compressed: $BACKUP_FILE_COMPRESSED"
     
     # Verify compressed backup
-    if verify_backup <(zcat "$BACKUP_FILE_COMPRESSED"); then
+    if verify_backup "$BACKUP_FILE_COMPRESSED"; then
         log "Backup verification successful"
         
         # Get backup size
