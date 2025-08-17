@@ -35,7 +35,6 @@ fi
 # Execution order
 SCRIPTS=(
   "01-basics-and-ssh.sh"
-  "02-firewall-ufw.sh"
   "03-fail2ban.sh"
   "04-nginx-certbot.sh"
   "05-docker.sh"
@@ -46,6 +45,7 @@ SCRIPTS=(
   "10-netplan-static-ip.sh"
   "11-apps-compose.sh"
   "12-dokku.sh"
+  "13-firewall-ufw.sh"
 )
 
 # Verify all scripts exist before execution
@@ -74,7 +74,7 @@ for s in "${SCRIPTS[@]}"; do
     log_error "Failed to execute ${s}"
     FAILED_SCRIPTS+=("$s")
     # Continue with other scripts unless it's a critical failure
-    if [[ "$s" =~ ^(01-basics|02-firewall|05-docker) ]]; then
+    if [[ "$s" =~ ^(01-basics|05-docker) ]]; then
       log_error "Critical script failed. Stopping execution."
       exit 1
     fi
@@ -92,6 +92,7 @@ fi
 echo
 log_success "Homelab setup completed!"
 echo "Next steps:"
+echo "- Firewall rules have been applied - all services should now be accessible from LAN"
 echo "- If you enabled static IP, verify with: ip a show"
 echo "- Set VNC password: sudo -u \$(awk -F: '\$3>=1000 && \$1!=\"nobody\"{print \$1; exit}' /etc/passwd) vncpasswd"
 echo "- Re-login (or: newgrp docker) so your user gets Docker group"

@@ -2,6 +2,10 @@
 set -euo pipefail
 . "$(dirname "$0")/lib/common.sh"; need_root
 
+# NOTE: This script runs LAST to ensure all services are installed first
+# This prevents issues where services might not start properly due to firewall restrictions
+# All ports defined in OPEN_PORTS will be opened for the networks in ALLOWED_CIDRS
+
 # Error handling
 cleanup() {
   local exit_code=$?
