@@ -86,10 +86,11 @@ install_cloudflared_apt(){
   echo "Installing cloudflared from Cloudflare APT repo..."
   # follow Cloudflare's recommended apt install steps
   sudo apt update
-  sudo apt install -y curl gnupg lsb-release
-  curl -fsSL https://pkg.cloudflare.com/pubkey.gpg | sudo gpg --dearmour -o /usr/share/keyrings/cloudflare-main-archive-keyring.gpg
-  echo "deb [signed-by=/usr/share/keyrings/cloudflare-main-archive-keyring.gpg] https://pkg.cloudflare.com/ $(lsb_release -cs) main" \
-    | sudo tee /etc/apt/sources.list.d/cloudflare-client.list > /dev/null
+  sudo apt install -y curl lsb-release
+  # Download the Cloudflare repository GPG key and save to /usr/share/keyrings
+  curl -L https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-archive-keyring.gpg >/dev/null
+  # Add the cloudflared APT source (uses the 'cloudflared' component path)
+  echo "deb [signed-by=/usr/share/keyrings/cloudflare-archive-keyring.gpg] https://pkg.cloudflare.com/cloudflared $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflared.list
   sudo apt update
   sudo apt install -y cloudflared
 }
