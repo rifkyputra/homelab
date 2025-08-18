@@ -35,13 +35,15 @@ Your desktop environment is assumed to be already installed (no desktop is insta
 
 ## Folder Layout
 
-Create this folder on the server (e.g., `/opt/homelab-scripts`) and place the files inside:
+Create this folder on the server (e.g., `/opt/homelab-scripts`) and place the files inside (current script set):
 
 ```
 homelab-scripts/
-├─ 00-run-all.sh
+├─ 00-run-all.sh (wrapper -> profiles)
+├─ selfhost/00-run-all.sh
+├─ cloud/00-run-all.sh
 ├─ 01-basics-and-ssh.sh
-├─ 02-firewall-ufw.sh
+├─ 02-unattended-upgrades.sh
 ├─ 03-fail2ban.sh
 ├─ 04-nginx-certbot.sh
 ├─ 05-docker.sh
@@ -51,9 +53,15 @@ homelab-scripts/
 ├─ 09-monitoring.sh
 ├─ 10-netplan-static-ip.sh
 ├─ 11-apps-compose.sh
+├─ 12-dokku.sh
+├─ 13-firewall-ufw.sh
+├─ 14-tailscale.sh
+├─ 15-swap.sh
+├─ 16-lynis.sh
 ├─ config.env
+├─ runner.sh
 └─ lib/
-   └─ common.sh
+  └─ common.sh
 ```
 
 ---
@@ -65,7 +73,6 @@ homelab-scripts/
 sudo mkdir -p /opt/homelab-scripts
 cd /opt/homelab-scripts
 
-# paste all files above into this folder…
 
 # make executable
 sudo chmod +x *.sh lib/common.sh
@@ -81,6 +88,7 @@ After it finishes:
 
 * Set a VNC password and start VNC:
 
+  
   ```bash
   sudo -u <your-username> vncpasswd
   sudo systemctl start vncserver@1
@@ -103,14 +111,26 @@ After it finishes:
 All knobs live in `config.env`:
 
 ```ini
-# Static IP (Netplan)
+# Static IP / network
 STATIC_IP_ENABLED=true
-NET_IFACE=""                 # empty = auto-detect default route interface
+NET_IFACE=""                      # auto-detect if empty
 STATIC_IP_CIDR="192.168.1.10/24"
 GATEWAY_IP="192.168.1.1"
 DNS_SERVERS="1.1.1.1,8.8.8.8"
 
-# Domain (optional; leave empty to skip certbot)
+# Unattended upgrades
+ALLOW_NON_SECURITY_UPDATES=false   # true = include -updates repo
+
+# Swap (created if none exists)
+SWAP_SIZE_GB=2
+SWAPFILE=/swapfile
+
+# Tailscale (optional)
+TAILSCALE_ENABLE=false
+TAILSCALE_AUTHKEY=""              # optional; else run tailscale up manually
+TAILSCALE_EXTRA_ARGS="--ssh"       # e.g. "--ssh --advertise-exit-node"
+
+# Domain / TLS
 DOMAIN_NAME=""
 ADMIN_EMAIL=""
 
@@ -134,18 +154,23 @@ GRAFANA_ADMIN_USER="admin"
 
 ## What Each Script Does
 
-* **`01-basics-and-ssh.sh`** — apt update/upgrade; installs tools, SSH, tmux, etc.
-* **`02-firewall-ufw.sh`** — LAN-only firewall rules based on `ALLOWED_CIDRS` and `OPEN_PORTS`.
-* **`03-fail2ban.sh`** — SSH jail to block brute-force attempts.
-* **`04-nginx-certbot.sh`** — Nginx site + reverse proxy to Portainer/code-server/Grafana. Installs certbot; issues TLS only if `DOMAIN_NAME` is set and reachable.
-* **`05-docker.sh`** — Docker CE (official repo) + Buildx + Compose plugin; add your user to `docker` group.
-* **`06-virtualization.sh`** — KVM/QEMU/Libvirt, virt-manager, OVMF; enables `libvirtd`; adds user to `kvm` & `libvirt`.
-* **`07-cockpit.sh`** — Cockpit core + machines plugin; activates socket (`:9090`).
-* **`08-remote-desktop.sh`** — XRDP and TigerVNC; creates `~/.vnc/xstartup`; systemd `vncserver@.service` (display `:1` on port 5901).
-* **`09-monitoring.sh`** — Netdata (service) + Glances (CLI).
-* **`10-netplan-static-ip.sh`** — Writes `/etc/netplan/01-homelab.yaml` and applies it if `STATIC_IP_ENABLED=true`.
-* **`11-apps-compose.sh`** — Creates `/opt/homelab` compose stack (Portainer, code-server, Grafana) + systemd unit `homelab-compose.service`. Generates `/opt/homelab/.env` with secrets on first run.
-* **`00-run-all.sh`** — Runs all scripts in sequence (safe to re-run; idempotent where possible).
+* **`01-basics-and-ssh.sh`** — Base packages, SSH tools, common utilities.
+* **`02-unattended-upgrades.sh`** — Automatic security updates (optionally -updates).
+* **`03-fail2ban.sh`** — SSH brute-force protection.
+* **`04-nginx-certbot.sh`** — Nginx reverse proxy + optional Let’s Encrypt.
+* **`05-docker.sh`** — Docker CE + Buildx + Compose plugin.
+* **`06-virtualization.sh`** — KVM/QEMU/Libvirt stack.
+* **`07-cockpit.sh`** — Cockpit web console.
+* **`08-remote-desktop.sh`** — XRDP + TigerVNC setup.
+* **`09-monitoring.sh`** — Netdata + Glances.
+* **`10-netplan-static-ip.sh`** — Netplan static IP if enabled.
+* **`11-apps-compose.sh`** — Portainer, code-server, Grafana stack.
+* **`12-dokku.sh`** — Dokku PaaS + sample app templates.
+* **`13-firewall-ufw.sh`** — UFW rules (allow-list + open ports).
+* **`14-tailscale.sh`** — Optional Tailscale VPN (controlled by env).
+* **`15-swap.sh`** — Create swap file if missing.
+* **`16-lynis.sh`** — Security audit (Lynis) report.
+* **`00-run-all.sh`** — Wrapper dispatching to profile (selfhost/cloud).
 
 ---
 
