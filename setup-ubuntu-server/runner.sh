@@ -2,9 +2,25 @@
 set -euo pipefail
 
 # Generic profile runner.
-# Caller must set:
+# Normal usage: sourced from profile script (selfhost/00-run-all.sh or cloud/00-run-all.sh)
+# which defines:
 #   SCRIPT_ROOT  (directory containing scripts + config.env)
 #   SCRIPTS      (array of script filenames to run in order)
+# Convenience: if executed directly, optionally accept a profile name and delegate.
+
+# If invoked directly (not sourced) and required vars missing, delegate to profile wrapper.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]] && { [[ -z "${SCRIPT_ROOT:-}" ]] || ! declare -p SCRIPTS >/dev/null 2>&1; }; then
+  profile="${1:-selfhost}"
+  base_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+  case "$profile" in
+    selfhost|cloud)
+      exec "${base_dir}/${profile}/00-run-all.sh" "${@:2}" ;;
+    *)
+      echo "Usage: sudo ./selfhost/00-run-all.sh | sudo ./cloud/00-run-all.sh" >&2
+      echo "Or:   sudo ./runner.sh [selfhost|cloud]" >&2
+      exit 1 ;;
+  esac
+fi
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 log_error() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2; }
@@ -22,7 +38,10 @@ if [[ -z "${SCRIPT_ROOT:-}" || ! -d "${SCRIPT_ROOT}" ]]; then
 if [[ ! -f "${SCRIPT_ROOT}/config.env" ]]; then
   log_error "config.env missing in ${SCRIPT_ROOT}"; exit 1; fi
 
-if [[ ${#SCRIPTS[@]:-0} -eq 0 ]]; then
+# Validate SCRIPTS array presence & non-empty
+if ! declare -p SCRIPTS >/dev/null 2>&1; then
+  log_error "SCRIPTS array not defined by caller (export SCRIPTS before invoking runner)"; exit 1; fi
+if ((${#SCRIPTS[@]} == 0)); then
   log_error "SCRIPTS array empty; profile misconfigured"; exit 1; fi
 
 log "Verifying scripts..."

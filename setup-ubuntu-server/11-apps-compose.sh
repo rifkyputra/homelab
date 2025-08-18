@@ -1,51 +1,58 @@
-#!/usr/bin/env bash
-set -euo pipefail
-. "$(dirname "$0")/lib/common.sh"; need_root
+# Compose file
+COMPOSE_FILE="${HOMELAB_DIR}/docker-compose.yml"
+log "Ensuring Docker Compose file: ${COMPOSE_FILE}"
 
-# Error handling
-cleanup() {
-  local exit_code=$?
-  if [[ $exit_code -ne 0 ]]; then
-    log_error "Docker Compose apps deployment failed"
-    log "You may need to clean up: docker compose -f /opt/homelab/docker-compose.yml down"
-  fi
-  exit $exit_code
-}
-trap cleanup EXIT
+NEW_COMPOSE_CONTENT=$(cat <<'EOF'
+services:
+  portainer:
+    image: portainer/portainer-ce:latest
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9443:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
 
-msg "Deploy Portainer, code-server, Grafana via Docker Compose"
+  code:
+    image: codercom/code-server:latest
+    restart: unless-stopped
+    environment:
+      - PASSWORD=${CODE_SERVER_PASSWORD}
+      - DEFAULT_WORKSPACE=/home/coder/project
+    user: "${TARGET_UID}:${TARGET_GID}"
+    volumes:
+      - code_data:/home/coder/project
+    ports:
+      - "8080:8080"
+    command: ["--auth","password","--bind-addr","0.0.0.0:8080","--base-path","/code"]
 
-# Check if Docker is available
-if ! command -v docker >/dev/null 2>&1; then
-  log_error "Docker is not installed or not in PATH"
-  exit 1
+  grafana:
+    image: grafana/grafana-oss:latest
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_SERVER_ROOT_URL=/grafana
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+volumes:
+  portainer_data:
+  code_data:
+  grafana_data:
+EOF
+)
+
+if [[ ! -f "$COMPOSE_FILE" ]] || ! diff -q <(echo "$NEW_COMPOSE_CONTENT") "$COMPOSE_FILE" >/dev/null 2>&1; then
+  log "Updating compose file contents"
+  printf '%s\n' "$NEW_COMPOSE_CONTENT" > "$COMPOSE_FILE"
+else
+  log "Compose file unchanged"
 fi
-
-# Check if Docker Compose is available
-if ! docker compose version >/dev/null 2>&1; then
-  log_error "Docker Compose plugin is not available"
-  exit 1
-fi
-
-# Check if Docker service is running
-if ! systemctl is-active --quiet docker; then
-  log_error "Docker service is not running"
-  exit 1
-fi
-
-# Create homelab directory
-HOMELAB_DIR="/opt/homelab"
-log "Creating homelab directory: ${HOMELAB_DIR}"
-if ! install -d -m 0755 "${HOMELAB_DIR}"; then
-  log_error "Failed to create ${HOMELAB_DIR}"
-  exit 1
-fi
-
-# Create or keep .env with generated secrets
-ENV_FILE="${HOMELAB_DIR}/.env"
-log "Managing environment file: ${ENV_FILE}"
-
-if [[ ! -f "${ENV_FILE}" ]]; then
   log "Generating new environment file with secrets..."
   CODE_SERVER_PASSWORD="$(tr -dc A-Za-z0-9 </dev/urandom | head -c 20 2>/dev/null || openssl rand -base64 20 | tr -d '=+/' | cut -c1-20)"
   GRAFANA_ADMIN_PASSWORD="$(tr -dc A-Za-z0-9 </dev/urandom | head -c 20 2>/dev/null || openssl rand -base64 20 | tr -d '=+/' | cut -c1-20)"
@@ -143,11 +150,10 @@ if ! docker compose -f "${COMPOSE_FILE}" config >/dev/null; then
   exit 1
 fi
 
-# systemd unit for compose stack
+# systemd unit for compose stack (kept for persistence across reboots)
 SYSTEMD_SERVICE="/etc/systemd/system/homelab-compose.service"
-log "Creating systemd service: ${SYSTEMD_SERVICE}"
-
-cat >"${SYSTEMD_SERVICE}" <<EOF
+log "Ensuring systemd unit: ${SYSTEMD_SERVICE}"
+NEW_UNIT_CONTENT=$(cat <<EOF
 [Unit]
 Description=Homelab Docker Compose stack
 Requires=docker.service
@@ -163,24 +169,21 @@ ExecStop=/usr/bin/docker compose down
 [Install]
 WantedBy=multi-user.target
 EOF
-
-# Reload systemd and enable service
+)
+if [[ ! -f "$SYSTEMD_SERVICE" ]] || ! diff -q <(echo "$NEW_UNIT_CONTENT") "$SYSTEMD_SERVICE" >/dev/null 2>&1; then
+  log "Updating systemd unit file"
+  printf '%s\n' "$NEW_UNIT_CONTENT" > "$SYSTEMD_SERVICE"
+  systemctl daemon-reload || true
+else
+  log "Systemd unit unchanged"
+fi
 log "Enabling homelab-compose service..."
-if ! systemctl daemon-reload; then
-  log_error "Failed to reload systemd daemon"
-  exit 1
-fi
+systemctl enable homelab-compose.service || true
 
-if ! systemctl enable homelab-compose.service; then
-  log_error "Failed to enable homelab-compose service"
-  exit 1
-fi
-
-# Start the service
-log "Starting homelab-compose service..."
-if ! systemctl start homelab-compose.service; then
-  log_error "Failed to start homelab-compose service"
-  log "Check logs with: journalctl -u homelab-compose.service"
+log "Pulling latest images and bringing stack up" 
+docker compose -f "$COMPOSE_FILE" pull || true
+if ! docker compose -f "$COMPOSE_FILE" up -d; then
+  log_error "docker compose up failed"
   exit 1
 fi
 

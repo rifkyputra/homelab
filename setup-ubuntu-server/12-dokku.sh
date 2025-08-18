@@ -19,13 +19,22 @@ else
   DOKKU_DOMAIN="${SERVER_IP}.nip.io"     # zero-config wildcard for LAN
 fi
 
-msg "Installing Dokku ${DOKKU_TAG}"
-WORKDIR="$(mktemp -d)"
-pushd "${WORKDIR}" >/dev/null
-wget -NP . "https://dokku.com/install/${DOKKU_TAG}/bootstrap.sh"
-DOKKU_TAG="${DOKKU_TAG}" bash bootstrap.sh
-popd >/dev/null
-rm -rf "${WORKDIR}"
+if command -v dokku >/dev/null 2>&1; then
+  INSTALLED_VER="$(dokku version 2>/dev/null | awk '{print $3}' || true)"
+  if [[ -n "$INSTALLED_VER" ]]; then
+    msg "Dokku already installed (version $INSTALLED_VER); skipping install"
+  else
+    msg "Dokku command exists but version detection failed; leaving installed state untouched"
+  fi
+else
+  msg "Installing Dokku ${DOKKU_TAG}"
+  WORKDIR="$(mktemp -d)"
+  pushd "${WORKDIR}" >/dev/null
+  wget -NP . "https://dokku.com/install/${DOKKU_TAG}/bootstrap.sh"
+  DOKKU_TAG="${DOKKU_TAG}" bash bootstrap.sh
+  popd >/dev/null
+  rm -rf "${WORKDIR}"
+fi
 
 # Ensure our homelab site no longer claims default_server so Dokku vhosts win
 if [[ -f /etc/nginx/sites-available/homelab ]]; then
@@ -54,7 +63,11 @@ ufw allow 443/tcp comment "Dokku HTTPS" || true
 
 # ===== Plugins: Let's Encrypt =====
 # Install plugin + daily auto-renew cron
-sudo dokku plugin:install https://github.com/dokku/dokku-letsencrypt.git || true
+if ! dokku plugin:list 2>/dev/null | grep -q '^letsencrypt'; then
+  sudo dokku plugin:install https://github.com/dokku/dokku-letsencrypt.git || true
+else
+  echo "Letsencrypt plugin already installed"
+fi
 sudo dokku letsencrypt:cron-job --add || true
 
 # If admin email provided in config.env, set globally

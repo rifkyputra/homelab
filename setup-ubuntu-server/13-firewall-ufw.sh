@@ -19,6 +19,22 @@ trap cleanup EXIT
 
 msg "Configure UFW firewall (LAN-only for selected ports)"
 
+# Skip full reset if desired rules unchanged (idempotency optimization)
+STATE_DIR=/var/lib/homelab
+install -d -m 0755 "$STATE_DIR" || true
+RULE_SIG_FILE="$STATE_DIR/ufw_rules.sha256"
+CURRENT_SIG=$(printf '%s\n%s' "${ALLOWED_CIDRS}" "${OPEN_PORTS}" | sha256sum | awk '{print $1}')
+if [[ -f "$RULE_SIG_FILE" ]]; then
+  PREV_SIG=$(cat "$RULE_SIG_FILE" 2>/dev/null || true)
+  if [[ "$PREV_SIG" == "$CURRENT_SIG" ]]; then
+    log "Firewall rule inputs unchanged; skipping reconfigure"
+    ufw status verbose || true
+    exit 0
+  else
+    log "Rule signature changed; re-applying firewall configuration"
+  fi
+fi
+
 # Validate ALLOWED_CIDRS and OPEN_PORTS
 if [[ -z "${ALLOWED_CIDRS}" ]]; then
   log_error "ALLOWED_CIDRS is empty in config.env"
@@ -91,3 +107,4 @@ log "UFW firewall configuration:"
 ufw status verbose
 
 log_success "Firewall configured successfully with ${RULES_ADDED} rules"
+echo "$CURRENT_SIG" > "$RULE_SIG_FILE" || true

@@ -42,8 +42,19 @@ nginx -t && systemctl reload nginx
 msg "Install certbot (skips issuance if no DOMAIN_NAME)"
 aptq install certbot python3-certbot-nginx
 if [[ -n "${DOMAIN_NAME}" && -n "${ADMIN_EMAIL:-}" ]]; then
-  certbot --nginx -d "${DOMAIN_NAME}" -m "${ADMIN_EMAIL}" --agree-tos --no-eff-email --redirect -n || \
-    echo "Certbot failed; check DNS, ports 80/443."
+  # Check if cert already exists & is valid >15 days
+  if [[ -d "/etc/letsencrypt/live/${DOMAIN_NAME}" ]]; then
+    if openssl x509 -checkend $((15*24*3600)) -noout -in "/etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem" 2>/dev/null; then
+      echo "Existing certificate for ${DOMAIN_NAME} valid >15 days; skipping issuance"
+    else
+      echo "Certificate nearing expiry; attempting renewal"
+      certbot renew --dry-run || true
+      certbot renew || true
+    fi
+  else
+    certbot --nginx -d "${DOMAIN_NAME}" -m "${ADMIN_EMAIL}" --agree-tos --no-eff-email --redirect -n || \
+      echo "Certbot initial issuance failed; check DNS, ports 80/443."
+  fi
 else
   echo "No domain provided; HTTPS not configured yet."
 fi
