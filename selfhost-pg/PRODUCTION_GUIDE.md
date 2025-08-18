@@ -81,6 +81,9 @@ open http://localhost:5050
 - [ ] **Passwords**: All default passwords changed to strong ones
 - [ ] **SSL**: SSL certificates installed and configured
 - [ ] **Network**: Firewall configured to allow only necessary ports
+	- Run `make firewall-status` to verify
+	- Use `make firewall-local` for localhost-only
+	- Use `make firewall-allow IPS="1.2.3.4 5.6.7.8"` for remote app servers
 - [ ] **Backups**: Backup encryption and offsite storage configured
 - [ ] **Monitoring**: Alerting configured for security events
 - [ ] **Updates**: Regular security updates scheduled
@@ -197,5 +200,8 @@ Your PostgreSQL setup now includes:
 - `make backup` - Create manual backup
 - `make monitor` - Health check
 - `make security` - Security audit
+- `make firewall-status` - Show DB firewall rules
+- `make firewall-allow IPS="x.x.x.x"` - Restrict to specific IPs
+- `make firewall-local` - Lock to localhost access
 
 **💡 Pro Tip:** Bookmark this guide and keep your `.env` file secure and backed up separately!

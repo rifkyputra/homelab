@@ -42,6 +42,28 @@ cd ../selfhost-pg/
 docker compose up -d
 ```
 
+### 🔥 Firewall (UFW) Management (Database Access)
+
+The stack ships with a firewall helper (`selfhost-pg/scripts/firewall.sh`) and Makefile targets to control who can reach PostgreSQL (5432) and pgAdmin.
+
+Common operations (run inside `selfhost-pg/`):
+
+```bash
+make firewall-status          # Show current rules for DB ports
+make firewall-local           # Restrict access to localhost only
+make firewall-open-all        # Allow access from anywhere (NOT recommended)
+make firewall-allow IPS="1.2.3.4 5.6.7.8"   # Allow only specific IPs
+make firewall-close           # Remove rules (falls back to default UFW policy)
+```
+
+Dry run (preview commands without applying):
+
+```bash
+DRY_RUN=1 ./scripts/firewall.sh allow --ips "203.0.113.5 198.51.100.7"
+```
+
+Rules are tagged with `selfhost-pg` for easy cleanup.
+
 
 ## 🛡️ Security Features
 
@@ -89,4 +111,4 @@ This project is open source and available under the [MIT License](LICENSE).
 
 ---
 
-**Built with ❤️ for the self-hosting community**
+## Built with ❤️ for the self-hosting community

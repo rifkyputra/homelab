@@ -1,7 +1,7 @@
 # PostgreSQL Production Management Makefile
 # Usage: make help
 
-.PHONY: help start stop restart status backup monitor security health logs clean
+.PHONY: help start stop restart status backup monitor security health logs clean firewall-status firewall-open-all firewall-allow firewall-close firewall-local
 
 # Default target
 help: ## Show this help message
@@ -182,3 +182,20 @@ info: ## Show system information
 	@echo "Volumes: $$(docker volume ls --format 'table {{.Name}}' | grep selfhostpg)"
 	@echo "Networks: $$(docker network ls --format 'table {{.Name}}' | grep selfhostpg)"
 	@echo "Disk Usage: $$(du -sh backups/ logs/ 2>/dev/null || echo 'No data directories')"
+
+# Firewall management
+firewall-status: ## Show firewall rules for database & pgAdmin ports
+	@./scripts/firewall.sh status
+
+firewall-open-all: ## Allow all sources to access PostgreSQL & pgAdmin ports
+	@./scripts/firewall.sh allow-all
+
+firewall-allow: ## Allow only specific IPs (usage: make firewall-allow IPS="1.2.3.4 5.6.7.8")
+	@if [ -z "$(IPS)" ]; then echo "❌ Please provide IPS=\"IP1 IP2\""; exit 1; fi; \
+	./scripts/firewall.sh allow --ips "$(IPS)"
+
+firewall-close: ## Remove all selfhost-pg firewall rules for these ports
+	@./scripts/firewall.sh close
+
+firewall-local: ## Restrict access to localhost only (loopback)
+	@./scripts/firewall.sh allow-local

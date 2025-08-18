@@ -141,37 +141,36 @@ docker compose logs database
 # Check for permission or configuration issues
 ```
 
-#### Option 3: Complete rebuild (⚠️ DELETES ALL DATA)
+## Firewall Control (UFW)
+
+If deploying on a secured server with UFW enabled, manage access to PostgreSQL (5432) and pgAdmin using the provided helper:
 
 ```bash
-# WARNING: This will delete all your database data!
-docker compose down -v  # -v removes volumes
-docker compose up -d
+# Show rules
+make firewall-status
+
+# Restrict to localhost (default secure posture)
+make firewall-local
+
+# Allow only specific IPs
+make firewall-allow IPS="203.0.113.10 198.51.100.7"
+
+# Open to all (NOT recommended for production)
+make firewall-open-all
+
+# Remove all selfhost-pg rules
+make firewall-close
 ```
 
-#### Option 4: Fresh start with new environment variables
+Direct script usage & dry run example:
+
 ```bash
-# After modifying .env file
-docker compose down
-docker compose rm  # Remove containers
-docker compose up -d --force-recreate
+DRY_RUN=1 ./scripts/firewall.sh allow --ips "203.0.113.5 198.51.100.7"
 ```
 
-### Troubleshooting
+All rules are tagged with `selfhost-pg` for easy identification.
 
-If pgAdmin login fails after changing credentials:
-```bash
-docker compose stop pgadmin
-docker compose rm pgadmin
-docker volume rm selfhostpg_pgadmin_data
-docker compose up pgadmin -d
-```
-
-If PostgreSQL won't start:
-```bash
-docker compose logs database
-# Check for permission or configuration issues
-```
+<!-- Removed duplicate rebuild/troubleshooting sections to satisfy markdown lint -->
 
 ## Data Persistence
 
